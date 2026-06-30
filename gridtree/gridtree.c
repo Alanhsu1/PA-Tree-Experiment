@@ -18,7 +18,6 @@
 
 #define UNSET_ADDR_TYPE(ADDR) (((uint32_t)ADDR) & ~((uint32_t)0b11111 << ADDRESS_TYPE_SHIFT))
 #define SET_ADDR_TYPE(ADDR, TYPE) ((UNSET_ADDR_TYPE(ADDR)) | ((uint32_t)TYPE << ADDRESS_TYPE_SHIFT))
-
 #define INTERSECT_1D(a1, a2, b1, b2) (max((a1), (b1)) <= min((a2), (b2)))
 #define INTERSECT_2D(a1x, a1y, a2x, a2y, b1x, b1y, b2x, b2y) ((INTERSECT_1D(a1x, a2x, b1x, b1x)) && (INTERSECT_1D(a1y, a2y, b1y, b2y)))
 
@@ -895,7 +894,7 @@ static inline SPLIT_TYPE split_type()
     return SPLIT_LAZY;
 #endif
 #if EXPERIMENT == EXP_ADAPTIVE
-    float cur_voltage = get_voltage();
+    float cur_voltage = get_split_voltage();
 
     if (cur_voltage >= AMPLE_ENERGY_VOLTAGE_THRESHOLD)
         return SPLIT_REGULAR;
@@ -922,16 +921,16 @@ inline void SPLIT()
 #endif
 
     stat_timer_1_start = get_current_tick(LOW_RES_CLK);
-    while (*split_list_ptr != NULL)
+     while (*split_list_ptr != NULL)
     {
         phase = PHASE_SPLIT;
         type = split_type();
 
         collect_query_split(idx++, type);
 
-        double voltage_before = get_voltage();
+        double voltage_before = peek_voltage();
         split(*split_list_ptr, type);
-        double voltage_after = get_voltage();
+        double voltage_after = peek_voltage();
         last_voltage_change = voltage_after - voltage_before;
 
         ++split_list_ptr;
@@ -976,7 +975,7 @@ static inline COMPACTION_TYPE compaction_type()
     return COMPACTION_NONE;
 #endif
 #if EXPERIMENT == EXP_ADAPTIVE 
-    float cur_voltage = get_voltage();
+    float cur_voltage =  get_compaction_voltage();
 
     if (cur_voltage >= AMPLE_ENERGY_VOLTAGE_THRESHOLD)
         return COMPACTION_REGULAR;
@@ -1003,16 +1002,16 @@ inline void COMPACTION()
 #endif
     
     stat_timer_1_start = get_current_tick(LOW_RES_CLK);
-    while (*compaction_list_ptr != NULL)
+     while (*compaction_list_ptr != NULL)
     {
         phase = PHASE_COMPACTION;
         type = compaction_type();
 
         collect_query_compaction(idx++, type);
 
-        double voltage_before = get_voltage();
+        double voltage_before = peek_voltage();
         compaction(*compaction_list_ptr, type);
-        double voltage_after = get_voltage();
+        double voltage_after = peek_voltage();
         last_voltage_change = voltage_after - voltage_before;
 
         ++compaction_list_ptr;
@@ -1088,4 +1087,3 @@ inline void GRIDTREE_STATS()
 {
     stat_avg_cell_length();
 }
-
