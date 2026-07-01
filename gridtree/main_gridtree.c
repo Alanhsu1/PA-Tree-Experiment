@@ -12,6 +12,9 @@
 #include "query.h"
 
 #define tskTEST_PRIORITY (tskIDLE_PRIORITY + 1)
+#define LOW_RES_TICKS_PER_SECOND 32768.0
+#define SESSION_QUERY_SEPARATION_TICKS ((uint32_t)(LOW_RES_TICKS_PER_SECOND * SESSION_QUERY_SEPARATION_SECONDS))
+#define AVG_INSERT_LOW_RES_TICKS (LOW_RES_TICKS_PER_SECOND * AVG_INSERT_TIME_SECONDS)
 
 extern Record query_records[SCAN_COUNT / 2];
 extern Record scan_query_records[5];
@@ -43,6 +46,15 @@ uint32_t scan_head = 0;
 #pragma PERSISTENT(scan_query_elapsed_time)
 double scan_query_elapsed_time[SCAN_COUNT] = {0};
 
+#pragma PERSISTENT(scan_query_pending_insert)
+uint32_t scan_query_pending_insert[SCAN_COUNT] = {0};
+
+#pragma PERSISTENT(scan_query_end_tick)
+uint32_t scan_query_end_tick[SCAN_COUNT] = {0};
+
+#pragma PERSISTENT(session_query_start_tick)
+uint32_t session_query_start_tick = 0;
+
 #pragma NOINIT(d)
 Record d;
 
@@ -62,6 +74,11 @@ extern BREAKPOINT_TYPE breakpoint;
 extern Statistics stats;
 
 void gridtree_test();
+static void run_session_queries(uint32_t start_tick);
+static uint32_t get_session_query_ready_tick(uint32_t last_busy_tick, uint32_t query_arrival_tick, uint32_t *pending_insert_count);
+static uint32_t ceil_ticks(double ticks);
+static void wait_until_tick(uint32_t target_tick);
+static void generate_session_query(uint32_t idx, Record *r1, Record *r2);
 
 void main_gridtree()
 {
@@ -73,7 +90,6 @@ void main_gridtree()
 void gridtree_test()
 {
     uint32_t start, end;
-    uint32_t query_start, query_end;
 
     CHECKPOINT(CHECKPOINT_INIT);
 
@@ -145,31 +161,13 @@ void gridtree_test()
 
     collect_scan_query_record();
 
-    Record r1, r2;
     start = get_current_tick(LOW_RES_CLK);
 
 //    SET_BREAKPOINT(BP_TEST);
 
     CHECKPOINT(CHECKPOINT_SCAN);
 
-    while (scan_head < SCAN_COUNT)
-    {
-        r1 = query_records[(scan_head / 2) % query_records_head];
-        r2.x = min(r1.x + SCAN_XY_RANGE + (rand() % SCAN_XY_RANGE), X_MAX);
-        r2.y = min(r1.y + SCAN_XY_RANGE + (rand() % SCAN_XY_RANGE), Y_MAX);
-
-        if ((scan_head & 1) == 0)
-            r2.timestamp = min(r1.timestamp + SCAN_TIME_RANGE + (rand() % SCAN_TIME_RANGE), INSERT_COUNT);
-        else
-            r2.timestamp = INSERT_COUNT;
-
-        query_start = get_current_tick(LOW_RES_CLK);
-        SCAN(&r1, &r2);
-        query_end = get_current_tick(LOW_RES_CLK);
-
-        scan_query_elapsed_time[scan_head] = get_elapsed_time(query_start, query_end, LOW_RES_CLK);
-        ++scan_head;
-    }
+    run_session_queries(start);
 
     end = get_current_tick(LOW_RES_CLK);
     stats.elapsed_time[PHASE_SCAN] = get_elapsed_time(start, end, LOW_RES_CLK);
@@ -191,4 +189,88 @@ void gridtree_test()
     SET_BREAKPOINT(BP_FINISHED);
 
     for (;;);
+}
+
+static void run_session_queries(uint32_t start_tick)
+{
+    if (session_query_start_tick == 0)
+    {
+        session_query_start_tick = start_tick;
+        CHECKPOINT(CHECKPOINT_SCAN);
+    }
+
+    while (scan_head < SCAN_COUNT)
+    {
+        Record r1, r2;
+        uint32_t idx = scan_head;
+        uint32_t query_arrival_tick = session_query_start_tick + idx * SESSION_QUERY_SEPARATION_TICKS;
+        uint32_t last_busy_tick = (idx == 0 ? session_query_start_tick : scan_query_end_tick[idx - 1]);
+        uint32_t pending_insert_count = 0;
+        uint32_t query_ready_tick = get_session_query_ready_tick(last_busy_tick, query_arrival_tick, &pending_insert_count);
+        uint32_t query_start_tick, query_end_tick;
+
+        wait_until_tick(query_ready_tick);
+        generate_session_query(idx, &r1, &r2);
+
+        query_start_tick = get_current_tick(LOW_RES_CLK);
+        SCAN(&r1, &r2);
+        query_end_tick = get_current_tick(LOW_RES_CLK);
+
+        scan_query_pending_insert[idx] = pending_insert_count;
+        scan_query_elapsed_time[idx] = get_elapsed_time(query_start_tick, query_end_tick, LOW_RES_CLK);
+        scan_query_end_tick[idx] = query_end_tick;
+        ++scan_head;
+    }
+}
+
+static uint32_t get_session_query_ready_tick(uint32_t last_busy_tick, uint32_t query_arrival_tick, uint32_t *pending_insert_count)
+{
+    double elapsed_ticks;
+    uint32_t insert_count;
+    double remainder_ticks;
+
+    *pending_insert_count = 0;
+
+    if ((int32_t)(last_busy_tick - query_arrival_tick) >= 0)
+        return last_busy_tick;
+
+    elapsed_ticks = (double)(query_arrival_tick - last_busy_tick);
+    insert_count = (uint32_t)(elapsed_ticks / AVG_INSERT_LOW_RES_TICKS);
+    remainder_ticks = elapsed_ticks - (double)insert_count * AVG_INSERT_LOW_RES_TICKS;
+
+    if (remainder_ticks > 0)
+    {
+        ++insert_count;
+        query_arrival_tick += ceil_ticks(AVG_INSERT_LOW_RES_TICKS - remainder_ticks);
+    }
+
+    *pending_insert_count = insert_count;
+    return query_arrival_tick;
+}
+
+static uint32_t ceil_ticks(double ticks)
+{
+    uint32_t whole_ticks = (uint32_t)ticks;
+    return (ticks > (double)whole_ticks ? whole_ticks + 1 : whole_ticks);
+}
+
+static void wait_until_tick(uint32_t target_tick)
+{
+    while ((int32_t)(get_current_tick(LOW_RES_CLK) - target_tick) < 0);
+}
+
+static void generate_session_query(uint32_t idx, Record *r1, Record *r2)
+{
+    if (query_records_head > 0)
+        *r1 = query_records[(idx / 2) % query_records_head];
+    else
+        *r1 = d;
+
+    r2->x = min(r1->x + SCAN_XY_RANGE + (rand() % SCAN_XY_RANGE), X_MAX);
+    r2->y = min(r1->y + SCAN_XY_RANGE + (rand() % SCAN_XY_RANGE), Y_MAX);
+
+    if ((idx & 1) == 0)
+        r2->timestamp = min(r1->timestamp + SCAN_TIME_RANGE + (rand() % SCAN_TIME_RANGE), INSERT_COUNT);
+    else
+        r2->timestamp = INSERT_COUNT;
 }
