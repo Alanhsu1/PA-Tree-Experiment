@@ -157,11 +157,19 @@ void gridtree_test()
         r1 = query_records[(scan_head / 2) % query_records_head];
         r2.x = min(r1.x + SCAN_XY_RANGE + (rand() % SCAN_XY_RANGE), X_MAX);
         r2.y = min(r1.y + SCAN_XY_RANGE + (rand() % SCAN_XY_RANGE), Y_MAX);
+        r2.timestamp = min(r1.timestamp + SCAN_TIME_RANGE + (rand() % SCAN_TIME_RANGE), INSERT_COUNT);
 
-        if ((scan_head & 1) == 0)
-            r2.timestamp = min(r1.timestamp + SCAN_TIME_RANGE + (rand() % SCAN_TIME_RANGE), INSERT_COUNT);
-        else
-            r2.timestamp = INSERT_COUNT;
+        query_start = get_current_tick(LOW_RES_CLK);
+        SCAN(&r1, &r2);
+        query_end = get_current_tick(LOW_RES_CLK);
+
+        scan_query_elapsed_time[scan_head] = get_elapsed_time(query_start, query_end, LOW_RES_CLK);
+        ++scan_head;
+
+        if (scan_head >= SCAN_COUNT)
+            break;
+
+        r2.timestamp = INSERT_COUNT;
 
         query_start = get_current_tick(LOW_RES_CLK);
         SCAN(&r1, &r2);
