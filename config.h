@@ -12,7 +12,7 @@
 #define EXP_TEST 6
 #define EXP_CELL_STATS 7
 
-#define EXPERIMENT EXP_ADAPTIVE
+#define EXPERIMENT EXP_GEN_WORKLOAD
 
 /* Input */
 #define DISTRIBUTION        1  // 0: uniform, 1: normal

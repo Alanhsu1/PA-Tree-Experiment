@@ -13,7 +13,7 @@
 
 #define tskTEST_PRIORITY (tskIDLE_PRIORITY + 1)
 
-extern Record query_records[SCAN_COUNT / 2];
+extern Record query_records[GET_COUNT];
 extern Record scan_query_records[5];
 extern uint32_t query_records_head;
 extern uint32_t buffered_records_cnt;
@@ -39,12 +39,6 @@ uint32_t get_head = 0;
 
 #pragma PERSISTENT(scan_head)
 uint32_t scan_head = 0;
-
-#pragma PERSISTENT(scan_query_start_tick)
-uint32_t scan_query_start_tick[SCAN_COUNT] = {0};
-
-#pragma PERSISTENT(scan_query_end_tick)
-uint32_t scan_query_end_tick[SCAN_COUNT] = {0};
 
 #pragma NOINIT(d)
 Record d;
@@ -76,7 +70,6 @@ void main_gridtree()
 void gridtree_test()
 {
     uint32_t start, end;
-    uint32_t query_start, query_end;
 
     CHECKPOINT(CHECKPOINT_INIT);
 
@@ -157,30 +150,18 @@ void gridtree_test()
 
     while (scan_head < SCAN_COUNT)
     {
+
         r1 = query_records[(scan_head / 2) % query_records_head];
-        r2.x = min(r1.x + SCAN_XY_RANGE + (rand() % SCAN_XY_RANGE), X_MAX);
-        r2.y = min(r1.y + SCAN_XY_RANGE + (rand() % SCAN_XY_RANGE), Y_MAX);
-        r2.timestamp = min(r1.timestamp + SCAN_TIME_RANGE + (rand() % SCAN_TIME_RANGE), INSERT_COUNT);
-
-        query_start = get_current_tick(LOW_RES_CLK);
+        r2.x = min(r1.x + SCAN_XY_RANGE + (rand() % SCAN_XY_RANGE), X_MAX); r2.y = min(r1.y + SCAN_XY_RANGE + (rand() % SCAN_XY_RANGE), Y_MAX); r2.timestamp = min(r1.timestamp + SCAN_TIME_RANGE + (rand() % SCAN_TIME_RANGE), INSERT_COUNT);
+        
         SCAN(&r1, &r2);
-        query_end = get_current_tick(LOW_RES_CLK);
 
-        scan_query_start_tick[scan_head] = query_start;
-        scan_query_end_tick[scan_head] = query_end;
         ++scan_head;
-
-        if (scan_head >= SCAN_COUNT)
-            break;
 
         r2.timestamp = INSERT_COUNT;
 
-        query_start = get_current_tick(LOW_RES_CLK);
         SCAN(&r1, &r2);
-        query_end = get_current_tick(LOW_RES_CLK);
 
-        scan_query_start_tick[scan_head] = query_start;
-        scan_query_end_tick[scan_head] = query_end;
         ++scan_head;
     }
 

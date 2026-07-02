@@ -4,19 +4,11 @@
 
 float voltage_value;
 
-#define VOLTAGE_RECORD_MAX_COUNT 300
+#pragma PERSISTENT(voltage_arr)
+float voltage_arr[1500] = {0};
 
-#pragma PERSISTENT(split_voltage_arr)
-float split_voltage_arr[VOLTAGE_RECORD_MAX_COUNT] = {0};
-
-#pragma PERSISTENT(split_voltage_arr_head)
-uint16_t split_voltage_arr_head = 0;
-
-#pragma PERSISTENT(compaction_voltage_arr)
-float compaction_voltage_arr[VOLTAGE_RECORD_MAX_COUNT] = {0};
-
-#pragma PERSISTENT(compaction_voltage_arr_head)
-uint16_t compaction_voltage_arr_head = 0;
+#pragma PERSISTENT(voltage_arr_head)
+uint16_t voltage_arr_head = 0;
 
 void init_adc()
 {
@@ -85,36 +77,15 @@ static inline void disable_adc(){
     ADC12CTL0 &= ~(ADC12ENC | ADC12SC);
 }
 
-static float sample_voltage(float *record_arr, uint16_t *record_head)
+float get_voltage()
 {
   enable_adc();
   // voltage_value = (float)((ADC12MEM0) * (1.275 / 1024.0));
   voltage_value = (float)((ADC12MEM0) * (1.315 / 1024.0));
   // voltage_value = (float)((ADC12MEM0) * (1.295 / 1024.0));
-  if (record_arr != NULL && record_head != NULL && *record_head < VOLTAGE_RECORD_MAX_COUNT)
-  {
-    record_arr[(*record_head)++] = voltage_value;
-  }
+  if (voltage_arr_head == 1500)
+    voltage_arr_head = 0;
+  voltage_arr[voltage_arr_head++] = voltage_value;
   disable_adc();
   return voltage_value;
-}
-
-float get_voltage()
-{
-  return sample_voltage(NULL, NULL);
-}
-
-float get_split_voltage()
-{
-  return sample_voltage(split_voltage_arr, &split_voltage_arr_head);
-}
-
-float get_compaction_voltage()
-{
-  return sample_voltage(compaction_voltage_arr, &compaction_voltage_arr_head);
-}
-
-float peek_voltage()
-{
-  return sample_voltage(NULL, NULL);
 }
