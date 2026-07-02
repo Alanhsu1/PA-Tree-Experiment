@@ -10,7 +10,7 @@
 extern BREAKPOINT_TYPE breakpoint;
 
 #pragma PERSISTENT(buffered_records_cnt)
-uint32_t buffered_records_cnt = 0;
+volatile uint32_t buffered_records_cnt = 0;
 
 #define SAMPLE_COUNT 10240
 
@@ -51,7 +51,8 @@ void setup_sample_rate_timer()
     initUpParam.clockSource = TIMER_B_CLOCKSOURCE_SMCLK;
     initUpParam.clockSourceDivider = TIMER_B_CLOCKSOURCE_DIVIDER_32;
     initUpParam.timerPeriod = (CS_getSMCLK() >> 5) / SAMPLE_RATE;
-    initUpParam.timerInterruptEnable_TBIE = TIMER_B_TBIE_INTERRUPT_ENABLE;
+    initUpParam.timerInterruptEnable_TBIE = TIMER_B_TBIE_INTERRUPT_DISABLE;
+    initUpParam.captureCompareInterruptEnable_CCR0_CCIE = TIMER_B_CCIE_CCR0_INTERRUPT_ENABLE;
     initUpParam.timerClear = TIMER_B_DO_CLEAR;
     initUpParam.startTimer = false;
     Timer_B_initUpMode(TIMER_B0_BASE, &initUpParam);
@@ -59,10 +60,10 @@ void setup_sample_rate_timer()
     Timer_B_startCounter(TIMER_B0_BASE, TIMER_B_UP_MODE);
 }
 
-#pragma vector=TIMER0_B1_VECTOR
+#pragma vector=TIMER0_B0_VECTOR
 __interrupt void B0_ISR( void )
 {
-    TB0CTL &= ~TBIFG;
+    TB0CCTL0 &= ~CCIFG;
 
     ++buffered_records_cnt;
 

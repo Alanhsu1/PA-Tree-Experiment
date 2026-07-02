@@ -16,7 +16,7 @@
 extern Record query_records[GET_COUNT];
 extern Record scan_query_records[5];
 extern uint32_t query_records_head;
-extern uint32_t buffered_records_cnt;
+extern volatile uint32_t buffered_records_cnt;
 extern uint32_t tree_data_usage[INSERT_COUNT/100];
 
 #pragma NOINIT(workload_page)
@@ -44,13 +44,13 @@ uint32_t scan_head = 0;
 Record d;
 
 #pragma NOINIT(stat_timer_1_start)
-uint32_t stat_timer_1_start;
+uint64_t stat_timer_1_start;
 #pragma NOINIT(stat_timer_1_end)
-uint32_t stat_timer_1_end;
+uint64_t stat_timer_1_end;
 #pragma NOINIT(stat_timer_2_start)
-uint32_t stat_timer_2_start;
+uint64_t stat_timer_2_start;
 #pragma NOINIT(stat_timer_2_end)
-uint32_t stat_timer_2_end;
+uint64_t stat_timer_2_end;
 
 #pragma PERSISTENT(phase)
 PHASE phase = PHASE_NONE;
@@ -69,7 +69,7 @@ void main_gridtree()
 
 void gridtree_test()
 {
-    uint32_t start, end;
+    uint64_t start, end;
 
     CHECKPOINT(CHECKPOINT_INIT);
 
@@ -81,7 +81,17 @@ void gridtree_test()
         phase = PHASE_READ_DATA;
 
 #if SAMPLE_RATE > 0
-       while (buffered_records_cnt == 0);
+       uint8_t sample_ready = 0;
+       do
+       {
+           portENTER_CRITICAL();
+           if (buffered_records_cnt > 0)
+           {
+               --buffered_records_cnt;
+               sample_ready = 1;
+           }
+           portEXIT_CRITICAL();
+       } while (!sample_ready);
 #endif
 
         // low_res_timer_pause();
@@ -116,10 +126,6 @@ void gridtree_test()
            COMPACTION();
        }
 
-#if SAMPLE_RATE > 0
-       --buffered_records_cnt;
-#endif
-
        if (--checkpoint_countdown == 0)
            CHECKPOINT(CHECKPOINT_INSERT);
 
@@ -133,9 +139,9 @@ void gridtree_test()
 
     end = get_current_tick(LOW_RES_CLK);
     stats.elapsed_time[PHASE_ALL_INSERT] = get_elapsed_time(start, end, LOW_RES_CLK);
-    stats.elapsed_time[PHASE_INSERT] = get_elapsed_time(0, stats.elapsed_time[PHASE_INSERT], HIGH_RES_CLK);
-    stats.min_time[PHASE_INSERT] = get_elapsed_time(0, stats.min_time[PHASE_INSERT], HIGH_RES_CLK);
-    stats.max_time[PHASE_INSERT] = get_elapsed_time(0, stats.max_time[PHASE_INSERT], HIGH_RES_CLK);
+    stats.elapsed_time[PHASE_INSERT] = get_elapsed_time(0, (uint64_t)stats.elapsed_time[PHASE_INSERT], HIGH_RES_CLK);
+    stats.min_time[PHASE_INSERT] = get_elapsed_time(0, (uint64_t)stats.min_time[PHASE_INSERT], HIGH_RES_CLK);
+    stats.max_time[PHASE_INSERT] = get_elapsed_time(0, (uint64_t)stats.max_time[PHASE_INSERT], HIGH_RES_CLK);
 
 #if EXPERIMENT != EXP_CELL_STATS
 

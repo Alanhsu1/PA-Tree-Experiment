@@ -38,9 +38,9 @@ extern uint8_t snapshot_head;
 
 extern PHASE phase;
 
-extern uint32_t stat_timer_1_start;
+extern uint64_t stat_timer_1_start;
 
-extern uint32_t stat_timer_1_end;
+extern uint64_t stat_timer_1_end;
 
 extern Record query_candidate_split[SPLIT_LIST_MAX_COUNT];
 
@@ -853,9 +853,10 @@ inline RETURN_TYPE INSERT(const Record *const rec)
     stat_timer_1_end = get_current_tick(HIGH_RES_CLK);
     if (stat_timer_1_end > stat_timer_1_start)
     {
-        stats.elapsed_time[PHASE_INSERT] += stat_timer_1_end - stat_timer_1_start;
-        stats.min_time[PHASE_INSERT] = min(stats.min_time[PHASE_INSERT], stat_timer_1_end - stat_timer_1_start);
-        stats.max_time[PHASE_INSERT] = max(stats.max_time[PHASE_INSERT], stat_timer_1_end - stat_timer_1_start);
+        uint64_t elapsed_ticks = get_elapsed_ticks(stat_timer_1_start, stat_timer_1_end);
+        stats.elapsed_time[PHASE_INSERT] += elapsed_ticks;
+        stats.min_time[PHASE_INSERT] = min(stats.min_time[PHASE_INSERT], elapsed_ticks);
+        stats.max_time[PHASE_INSERT] = max(stats.max_time[PHASE_INSERT], elapsed_ticks);
     }
 #endif
 
@@ -1060,7 +1061,7 @@ inline uint16_t SCAN(const Record *const r1, const Record *const r2)
     ++stats.count[PHASE_SCAN];
 
 #ifdef STAT_TIME_MIN_MAX
-    uint32_t start_tick = get_current_tick(LOW_RES_CLK);
+    uint64_t start_tick = get_current_tick(LOW_RES_CLK);
 #endif
 
 #ifdef STAT_ENERGY_MIN_MAX
@@ -1070,7 +1071,7 @@ inline uint16_t SCAN(const Record *const r1, const Record *const r2)
     uint16_t ret = scan(r1, r2);
 
 #ifdef STAT_TIME_MIN_MAX
-    uint32_t end_tick = get_current_tick(LOW_RES_CLK);
+    uint64_t end_tick = get_current_tick(LOW_RES_CLK);
     stats.min_time[PHASE_SCAN] = min(stats.min_time[PHASE_SCAN], get_elapsed_time(start_tick, end_tick, LOW_RES_CLK));
     stats.max_time[PHASE_SCAN] = max(stats.max_time[PHASE_SCAN], get_elapsed_time(start_tick, end_tick, LOW_RES_CLK));
 #endif
@@ -1088,4 +1089,3 @@ inline void GRIDTREE_STATS()
 {
     stat_avg_cell_length();
 }
-

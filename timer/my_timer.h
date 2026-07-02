@@ -14,7 +14,8 @@ void high_res_timer_init();
 void high_res_timer_start();
 void low_res_timer_pause();
 void low_res_timer_resume();
-uint32_t get_current_tick(TIMER_TYPE type);
-double get_elapsed_time(uint32_t start, uint32_t end, TIMER_TYPE type);
+uint64_t get_current_tick(TIMER_TYPE type);
+uint64_t get_elapsed_ticks(uint64_t start, uint64_t end);
+double get_elapsed_time(uint64_t start, uint64_t end, TIMER_TYPE type);
 
 #endif

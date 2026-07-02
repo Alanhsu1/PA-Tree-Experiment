@@ -13,10 +13,10 @@ extern BREAKPOINT_TYPE breakpoint;
 extern Statistics stats;
 extern PHASE phase;
 
-extern uint32_t stat_timer_1_start;
-extern uint32_t stat_timer_1_end;
-extern uint32_t stat_timer_2_start;
-extern uint32_t stat_timer_2_end;
+extern uint64_t stat_timer_1_start;
+extern uint64_t stat_timer_1_end;
+extern uint64_t stat_timer_2_start;
+extern uint64_t stat_timer_2_end;
 
 extern uint16_t checkpoint_countdown;
 
