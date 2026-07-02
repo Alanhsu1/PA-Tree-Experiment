@@ -40,8 +40,11 @@ uint32_t get_head = 0;
 #pragma PERSISTENT(scan_head)
 uint32_t scan_head = 0;
 
-#pragma PERSISTENT(scan_query_elapsed_time)
-double scan_query_elapsed_time[SCAN_COUNT] = {0};
+#pragma PERSISTENT(scan_query_start_tick)
+uint32_t scan_query_start_tick[SCAN_COUNT] = {0};
+
+#pragma PERSISTENT(scan_query_end_tick)
+uint32_t scan_query_end_tick[SCAN_COUNT] = {0};
 
 #pragma NOINIT(d)
 Record d;
@@ -163,7 +166,8 @@ void gridtree_test()
         SCAN(&r1, &r2);
         query_end = get_current_tick(LOW_RES_CLK);
 
-        scan_query_elapsed_time[scan_head] = get_elapsed_time(query_start, query_end, LOW_RES_CLK);
+        scan_query_start_tick[scan_head] = query_start;
+        scan_query_end_tick[scan_head] = query_end;
         ++scan_head;
 
         if (scan_head >= SCAN_COUNT)
@@ -175,7 +179,8 @@ void gridtree_test()
         SCAN(&r1, &r2);
         query_end = get_current_tick(LOW_RES_CLK);
 
-        scan_query_elapsed_time[scan_head] = get_elapsed_time(query_start, query_end, LOW_RES_CLK);
+        scan_query_start_tick[scan_head] = query_start;
+        scan_query_end_tick[scan_head] = query_end;
         ++scan_head;
     }
 
